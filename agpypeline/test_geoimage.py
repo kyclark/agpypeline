@@ -7,8 +7,8 @@ import os
 import random
 import string
 import tempfile
-import pytest
 import numpy as np
+import pytest
 from .geoimage import clip_raster, clip_raster_intersection
 
 input_dir = os.path.realpath(
