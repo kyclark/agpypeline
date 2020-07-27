@@ -79,4 +79,4 @@ jobs:
       - name: Running pylint
         run: cat action_pylint_files.txt | xargs python3 -m pylint --rcfile ./pylint.rc -d relative-beyond-top-level 
       - name: Running pytest
-        run: python3 -m pytest --cov=./ --cov-report=xml
+        run: python3 -m pytest
