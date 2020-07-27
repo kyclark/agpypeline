@@ -77,6 +77,6 @@ jobs:
       - name: Files to be linted
         run: cat action_pylint_files.txt
       - name: Running pylint
-        run: cat action_pylint_files.txt | xargs python3 -m pylint --rcfile -d relative-beyond-top-level ./pylint.rc
+        run: cat action_pylint_files.txt | xargs python3 -m pylint --rcfile ./pylint.rc -d relative-beyond-top-level 
       - name: Running pytest
         run: pytest --cov=./ --cov-report=xml
