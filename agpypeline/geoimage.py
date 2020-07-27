@@ -3,50 +3,42 @@
 
 import os
 import subprocess
+from typing import Optional
 import logging
 import numpy as np
-from osgeo import gdal, ogr, osr
-from typing import Optional, Tuple
+
+from osgeo import gdal
+from osgeo import ogr
+from osgeo import osr
+
 import agpypeline.geometries as geometries
 
 
-# --------------------------------------------------
-def clip_raster(raster_path: str,
-                bounds: Tuple[float, float, float, float],
-                out_path: str = "temp.tif",
-                compress: bool = True) -> Optional[np.ndarray]:
+def clip_raster(raster_path: str, bounds: tuple, out_path: str = None, compress: bool = True) -> Optional[np.ndarray]:
     """Clip raster to polygon
     Arguments:
       raster_path: path to raster file
-      bounds:      (min_y, max_y, min_x, max_x)
-      out_path:    if provided, where to save as output file
-      compress:    set to False to disable compression of resulting image
-                   (defaults to True)
+      bounds: (min_y, max_y, min_x, max_x)
+      out_path: if provided, where to save as output file
+      compress: set to False to disable compression of resulting image (defaults to True)
     Return:
         A numpy array of image pixels
-
     Notes: Oddly, the "features path" can be either a filename
       OR a geojson string. GDAL seems to figure it out and do
       the right thing.
       From http://karthur.org/2015/clipping-rasters-in-python.html
     """
 
-    if not os.path.isfile(raster_path):
-        raise Exception(f'Bad input raster path "{raster_path}"')
+    if not out_path:
+        out_path = "temp.tif"
 
     # Clip raster to GDAL and read it to numpy array
-    coords = '{} {} {} {}'.format(bounds[2], bounds[1], bounds[3], bounds[0])
-    cmd = (f'gdal_translate {"-co COMPRESS=LZW" if compress else ""} '
-           f'-projwin {coords} "{raster_path}" "{out_path}"')
-
-    rv, out = subprocess.getstatusoutput(cmd)
-
-    if rv != 0:
-        raise Exception(f'{cmd}: {out}')
-
-    if not os.path.isfile(out_path):
-        raise Exception(f'Failed to create "{out_path}"')
-
+    coords = "%s %s %s %s" % (bounds[2], bounds[1], bounds[3], bounds[0])
+    if compress:
+        cmd = 'gdal_translate -projwin %s "%s" "%s"' % (coords, raster_path, out_path)
+    else:
+        cmd = 'gdal_translate -co COMPRESS=LZW -projwin %s "%s" "%s"' % (coords, raster_path, out_path)
+    subprocess.call(cmd, shell=True, stdout=open(os.devnull, 'wb'))
     out_px = np.array(gdal.Open(out_path).ReadAsArray())
 
     if np.count_nonzero(out_px) > 0:
@@ -58,7 +50,6 @@ def clip_raster(raster_path: str,
     return None
 
 
-# --------------------------------------------------
 def clip_raster_intersection(file_path: str, file_bounds: ogr.Geometry, plot_bounds: ogr.Geometry, out_file: str) ->\
         Optional[int]:
     """Clips the raster to the intersection of the file bounds and plot bounds
@@ -74,21 +65,16 @@ def clip_raster_intersection(file_path: str, file_bounds: ogr.Geometry, plot_bou
     Exceptions:
         Raises RuntimeError if the polygons are invalid
     """
-    logging.debug(
-        "Clip to intersect of plot boundary: File: '%s' '%s' Plot: '%s'",
-        file_path, str(file_bounds), str(plot_bounds))
+    logging.debug("Clip to intersect of plot boundary: File: '%s' '%s' Plot: '%s'", file_path, str(file_bounds), str(plot_bounds))
     try:
         if not file_bounds or not plot_bounds:
-            logging.error(
-                "Invalid polygon specified for clip_raster_intersection: File: '%s' plot: '%s'",
-                str(file_bounds), str(plot_bounds))
-            raise RuntimeError(
-                "One or more invalid polygons specified when clipping raster")
+            logging.error("Invalid polygon specified for clip_raster_intersection: File: '%s' plot: '%s'",
+                          str(file_bounds), str(plot_bounds))
+            raise RuntimeError("One or more invalid polygons specified when clipping raster")
 
         intersection = file_bounds.Intersection(plot_bounds)
         if not intersection or not intersection.Area():
-            logging.info("File does not intersect plot boundary: %s",
-                         file_path)
+            logging.info("File does not intersect plot boundary: %s", file_path)
             return None
 
         # Make sure we pass a multipolygon down to the tuple converter
@@ -103,15 +89,11 @@ def clip_raster_intersection(file_path: str, file_bounds: ogr.Geometry, plot_bou
         return clip_raster(file_path, tuples, out_path=out_file, compress=True)
 
     except Exception as ex:
-        logging.exception(
-            "Exception caught while clipping image to plot intersection")
+        logging.exception("Exception caught while clipping image to plot intersection")
         raise ex
 
 
-# --------------------------------------------------
-def clip_raster_intersection_json(file_path: str, file_bounds: str,
-                                  plot_bounds: str,
-                                  out_file: str) -> Optional[int]:
+def clip_raster_intersection_json(file_path: str, file_bounds: str, plot_bounds: str, out_file: str) -> Optional[int]:
     """Clips the raster to the intersection of the file bounds and plot bounds
     Arguments:
         file_path: the path to the source file
@@ -125,32 +107,22 @@ def clip_raster_intersection_json(file_path: str, file_bounds: str,
     Exceptions:
         Raises RuntimeError if the polygons are invalid
     """
-    logging.debug(
-        "Clip to intersect of plot boundary: File: '%s' '%s' Plot: '%s'",
-        file_path, str(file_bounds), str(plot_bounds))
+    logging.debug("Clip to intersect of plot boundary: File: '%s' '%s' Plot: '%s'", file_path, str(file_bounds),
+                  str(plot_bounds))
 
     file_poly = ogr.CreateGeometryFromJson(str(file_bounds))
     plot_poly = ogr.CreateGeometryFromJson(str(plot_bounds))
 
     if not file_poly or not plot_poly:
-        logging.error(
-            "Invalid polygon specified for clip_raster_intersection: File: '%s' plot: '%s'",
-            str(file_bounds), str(plot_bounds))
-        raise RuntimeError(
-            "One or more invalid polygons specified when clipping raster")
+        logging.error("Invalid polygon specified for clip_raster_intersection: File: '%s' plot: '%s'",
+                      str(file_bounds), str(plot_bounds))
+        raise RuntimeError("One or more invalid polygons specified when clipping raster")
 
     return clip_raster_intersection(file_path, file_poly, plot_poly, out_file)
 
 
-# --------------------------------------------------
-def create_geotiff(pixels: np.ndarray,
-                   gps_bounds: tuple,
-                   out_path: str,
-                   srid: int,
-                   nodata: int = -99,
-                   as_float: bool = False,
-                   image_md: dict = None,
-                   compress: bool = False) -> None:
+def create_geotiff(pixels: np.ndarray, gps_bounds: tuple, out_path: str, srid: int, nodata: int = -99,
+                   as_float: bool = False, image_md: dict = None, compress: bool = False) -> None:
     """Generate output GeoTIFF file given a numpy pixel array and GPS boundary.
     Arguments:
         pixels: numpy array of pixel values.
@@ -179,19 +151,16 @@ def create_geotiff(pixels: np.ndarray,
         0,  # rotation (0 = North is up)
         gps_bounds[1],  # upper-left y
         0,  # rotation (0 = North is up)
-        -((gps_bounds[1] - gps_bounds[0]) / float(nrows)
-          )  # N-S pixel resolution
+        -((gps_bounds[1] - gps_bounds[0]) / float(nrows))  # N-S pixel resolution
     )
 
     # Create output GeoTIFF and set coordinates & projection
     dtype = gdal.GDT_Float32 if as_float else gdal.GDT_Byte
 
     if compress:
-        output_raster = gdal.GetDriverByName('GTiff').Create(
-            out_path, ncols, nrows, channels, dtype, ['COMPRESS=LZW'])
+        output_raster = gdal.GetDriverByName('GTiff') .Create(out_path, ncols, nrows, channels, dtype, ['COMPRESS=LZW'])
     else:
-        output_raster = gdal.GetDriverByName('GTiff').Create(
-            out_path, ncols, nrows, channels, dtype)
+        output_raster = gdal.GetDriverByName('GTiff').Create(out_path, ncols, nrows, channels, dtype)
 
     output_raster.SetGeoTransform(geotransform)
     srs = osr.SpatialReference()
@@ -202,25 +171,20 @@ def create_geotiff(pixels: np.ndarray,
 
     if channels == 3:
         # typically 3 channels = RGB channels
-        output_raster.GetRasterBand(1).WriteArray(pixels[:, :,
-                                                         0].astype('uint8'))
+        output_raster.GetRasterBand(1).WriteArray(pixels[:, :, 0].astype('uint8'))
         output_raster.GetRasterBand(1).SetColorInterpretation(gdal.GCI_RedBand)
         output_raster.GetRasterBand(1).FlushCache()
         if nodata:
             output_raster.GetRasterBand(1).SetNoDataValue(nodata)
 
-        output_raster.GetRasterBand(2).WriteArray(pixels[:, :,
-                                                         1].astype('uint8'))
-        output_raster.GetRasterBand(2).SetColorInterpretation(
-            gdal.GCI_GreenBand)
+        output_raster.GetRasterBand(2).WriteArray(pixels[:, :, 1].astype('uint8'))
+        output_raster.GetRasterBand(2).SetColorInterpretation(gdal.GCI_GreenBand)
         output_raster.GetRasterBand(2).FlushCache()
         if nodata:
             output_raster.GetRasterBand(2).SetNoDataValue(nodata)
 
-        output_raster.GetRasterBand(3).WriteArray(pixels[:, :,
-                                                         2].astype('uint8'))
-        output_raster.GetRasterBand(3).SetColorInterpretation(
-            gdal.GCI_BlueBand)
+        output_raster.GetRasterBand(3).WriteArray(pixels[:, :, 2].astype('uint8'))
+        output_raster.GetRasterBand(3).SetColorInterpretation(gdal.GCI_BlueBand)
         output_raster.GetRasterBand(3).FlushCache()
         if nodata:
             output_raster.GetRasterBand(3).SetNoDataValue(nodata)
@@ -228,8 +192,7 @@ def create_geotiff(pixels: np.ndarray,
     elif channels > 1:
         for chan in range(channels):
             band = chan + 1
-            output_raster.GetRasterBand(band).WriteArray(
-                pixels[:, :, chan].astype('uint8'))
+            output_raster.GetRasterBand(band).WriteArray(pixels[:, :, chan].astype('uint8'))
             output_raster.GetRasterBand(band).FlushCache()
             if nodata:
                 output_raster.GetRasterBand(band).SetNoDataValue(nodata)
@@ -241,7 +204,6 @@ def create_geotiff(pixels: np.ndarray,
             output_raster.GetRasterBand(1).SetNoDataValue(nodata)
 
 
-# --------------------------------------------------
 def get_epsg(filename: str) -> Optional[str]:
     """Returns the EPSG of the georeferenced image file
     Args:
@@ -261,9 +223,7 @@ def get_epsg(filename: str) -> Optional[str]:
     return None
 
 
-# --------------------------------------------------
-def get_image_bounds(file_path: str,
-                     default_epsg: int = None) -> Optional[ogr.Geometry]:
+def get_image_bounds(file_path: str, default_epsg: int = None) -> Optional[ogr.Geometry]:
     """Loads the boundaries of the image file and returns the geometry representing the bounds
     Arguments:
         file_path: path to the file from which to load the bounds
@@ -287,9 +247,8 @@ def get_image_bounds(file_path: str,
         if default_epsg:
             epsg = default_epsg
         else:
-            logging.warning(
-                "Files does not have a coordinate system defined and no default was specified: '%s'",
-                file_path)
+            logging.warning("Files does not have a coordinate system defined and no default was specified: '%s'",
+                            file_path)
             return None
 
     ring = ogr.Geometry(ogr.wkbLinearRing)
@@ -302,9 +261,7 @@ def get_image_bounds(file_path: str,
     return geometries.polygon_from_ring(ring, int(epsg))
 
 
-# --------------------------------------------------
-def get_image_bounds_json(file_path: str,
-                          default_epsg: int = None) -> Optional[str]:
+def get_image_bounds_json(file_path: str, default_epsg: int = None) -> Optional[str]:
     """Loads the boundaries of the image file and returns the GeoJSON
        representing the bounds (including EPSG code)
     Arguments:
@@ -326,7 +283,6 @@ def get_image_bounds_json(file_path: str,
     return None
 
 
-# --------------------------------------------------
 def image_get_geobounds(source_path: str) -> list:
     """Uses gdal functionality to retrieve rectilinear boundaries from the file
     Args:
