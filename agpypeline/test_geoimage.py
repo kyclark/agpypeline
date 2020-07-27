@@ -89,16 +89,16 @@ def test_clip_raster_too_few_bounds() -> None:
             assert clip_raster(orthomosaic, bad_bounds) is None
 
 
-# --------------------------------------------------
-def test_clip_raster_intersection() -> None:
-    """
-    (file_path: str,
-     file_bounds: ogr.Geometry,
-     plot_bounds: ogr.Geometry,
-     out_file: str)
-    """
+# # --------------------------------------------------
+# def test_clip_raster_intersection() -> None:
+#     """
+#     (file_path: str,
+#      file_bounds: ogr.Geometry,
+#      plot_bounds: ogr.Geometry,
+#      out_file: str)
+#     """
 
-    assert clip_raster_intersection(orthomosaic, bounds, bounds, 'foo')
+#     assert clip_raster_intersection(orthomosaic, bounds, bounds, 'foo')
 
 
 # --------------------------------------------------
