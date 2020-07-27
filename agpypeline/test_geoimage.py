@@ -4,12 +4,12 @@ Author:  Ken Youens-Clark <kyclark@arizona.edu>
 """
 
 import os
-import numpy as np
 import random
 import string
-import pytest
 import tempfile
-from .geoimage import clip_raster
+import pytest
+import numpy as np
+from .geoimage import clip_raster, clip_raster_intersection
 
 input_dir = os.path.realpath(
     os.path.join(os.path.dirname(__file__), 'test_data', 'canopy'))
@@ -32,8 +32,8 @@ def test_clip_raster_ok_no_out_file() -> None:
     """
 
     assert os.path.isfile(orthomosaic)
-    px = clip_raster(orthomosaic, bounds)
-    assert isinstance(px, np.ndarray)
+    pixels = clip_raster(orthomosaic, bounds)
+    assert isinstance(pixels, np.ndarray)
 
 
 # --------------------------------------------------
@@ -46,10 +46,10 @@ def test_clip_raster_out_file() -> None:
     out_fh.close()
 
     try:
-        px = clip_raster(raster_path=orthomosaic,
-                         bounds=bounds,
-                         out_path=out_fh.name)
-        assert isinstance(px, np.ndarray)
+        pixels = clip_raster(raster_path=orthomosaic,
+                             bounds=bounds,
+                             out_path=out_fh.name)
+        assert isinstance(pixels, np.ndarray)
         assert os.path.isfile(out_fh.name)
 
     finally:
@@ -72,7 +72,7 @@ def test_clip_raster_bad_file() -> None:
     err = "'NoneType' object has no attribute 'ReadAsArray'"
 
     with pytest.raises(Exception, match=err):
-        px = clip_raster(bad, bounds)
+        _ = clip_raster(bad, bounds)
 
 
 # --------------------------------------------------
@@ -87,6 +87,18 @@ def test_clip_raster_too_few_bounds() -> None:
 
         with pytest.raises(IndexError, match='list index out of range'):
             assert clip_raster(orthomosaic, bad_bounds) is None
+
+
+# --------------------------------------------------
+def test_clip_raster_intersection() -> None:
+    """
+    (file_path: str,
+     file_bounds: ogr.Geometry,
+     plot_bounds: ogr.Geometry,
+     out_file: str)
+    """
+
+    assert clip_raster_intersection(orthomosaic, bounds, bounds, 'foo')
 
 
 # --------------------------------------------------
