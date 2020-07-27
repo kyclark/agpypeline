@@ -9,7 +9,7 @@ import string
 import tempfile
 import numpy as np
 import pytest
-from .geoimage import clip_raster, clip_raster_intersection
+from .geoimage import clip_raster #, clip_raster_intersection
 
 input_dir = os.path.realpath(
     os.path.join(os.path.dirname(__file__), 'test_data', 'canopy'))
